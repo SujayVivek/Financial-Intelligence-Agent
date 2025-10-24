@@ -2,3 +2,5 @@ fastapi
 uvicorn[standard]
 tweepy
 python-dotenv
+transformers  # for summarization
+torch          # for transformers to work
