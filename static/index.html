@@ -30,10 +30,86 @@
     a.tlink { color: #bfe3ff; text-decoration: none; }
     .loader { animation: pulse 1.2s infinite; }
     @keyframes pulse { 0% {opacity:0.5} 50% {opacity:1} 100% {opacity:0.5} }
+
+    /* slide-down reveal for cards */
+    .tweet-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    .tweet-card {
+      opacity: 0;
+      transform: translateY(-12px) scale(0.995);
+      will-change: transform, opacity;
+      padding: 18px;
+      border-radius: 12px;
+      overflow: hidden;
+      position: relative;
+    }
+    .tweet-card.show {
+      animation: slideIn .42s cubic-bezier(.22,.9,.32,1) forwards;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-16px) scale(0.995); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* reveal the link area when card is clicked */
+    .tweet-link-row {
+      max-height: 0;
+      transition: max-height .28s cubic-bezier(.2,.9,.3,1), opacity .28s;
+      overflow: hidden;
+      opacity: 0;
+      margin-top: 10px;
+    }
+    .tweet-card.open .tweet-link-row {
+      max-height: 80px;
+      opacity: 1;
+    }
+
+    /* small styling */
+    .tweet-meta { font-size: 0.88rem; color: #cbd5e1; }
+    .tweet-text { font-size: 1rem; color: #e6f2ff; margin-top: 6px; white-space: pre-wrap; }
+    .why-selected { margin-top: 8px; font-size: 0.86rem; color: #a8c4d8; }
+
+    /* skeleton placeholders while generating */
+    .skeleton {
+      height: 76px;
+      border-radius: 10px;
+      background: linear-gradient(90deg, rgba(255,255,255,0.03), rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+      animation: skeletonPulse 1.2s infinite;
+    }
+    @keyframes skeletonPulse {
+      0% { opacity: 0.45 }
+      50% { opacity: 1 }
+      100% { opacity: 0.45 }
+    }
+
+    /* Small 'open' indicator */
+    .open-ind {
+      position: absolute;
+      right: 12px;
+      top: 12px;
+      font-size: 0.8rem;
+      color: #bfe3ff;
+      opacity: 0.9;
+    }
+
+    /* summary output container */
+    #summaryOutput {
+      margin-top: 14px;
+      background: rgba(0,0,0,0.18);
+      padding: 12px;
+      border-radius: 10px;
+      color: #e8f3ff;
+      display: none; /* initially hidden; shown when user clicks Give Summary with AI */
+      white-space: pre-wrap;
+    }
+
+    /* small responsive tweaks */
+    @media (min-width: 768px) {
+      .tweet-grid { grid-template-columns: 1fr 1fr; gap: 14px; }
+    }
   </style>
 </head>
 <body>
-  <div class="w-full max-w-5xl glass p-6">
+  <div class="w-full max-w-6xl glass p-6">
     <header class="flex items-center justify-between mb-6">
       <div>
         <h1 class="text-3xl font-semibold">🧠 Twitter AI News — Grok Powered</h1>
@@ -58,80 +134,135 @@
 
     <div id="status" class="text-sm text-gray-300 mb-4"></div>
 
-    <div id="results" class="grid grid-cols-1 gap-4"></div>
+    <div id="results" class="tweet-grid"></div>
 
-    <button id="summaryBtn">Give Summary with AI</button>
-    <div id="summaryOutput"></div>
+    <div class="mt-6 flex items-center gap-3">
+      <button id="summaryBtn" class="glass px-4 py-2 rounded-md">Give Summary with AI</button>
+      <div id="summaryHint" class="text-sm text-gray-300">Summary is generated but hidden until you click the button.</div>
+    </div>
+
+    <div id="summaryOutput" class="glass mt-4 p-4"></div>
   </div>
 
 <script>
-
-document.getElementById("summaryBtn").onclick = async () => {
-    const topic = document.getElementById("topicSelect").value;
-    const res = await fetch(`http://127.0.0.1:8000/get_summary?topic=${topic}`);
-    const data = await res.json();
-    document.getElementById("summaryOutput").innerHTML =
-        data.summary ? `<pre>${data.summary}</pre>` : `<p>${data.error}</p>`;
-};
-
-async function fetchGrok(topic) {
-  const n = parseInt(document.getElementById('numSelect').value || '10');
-  const status = document.getElementById('status');
-  const results = document.getElementById('results');
-  results.innerHTML = '';
-  status.innerHTML = `Fetching top ${n} tweets for <strong>${topic}</strong> — loading... <span class="loader">●</span>`;
-  
-  try {
-    const res = await fetch(`/get_summary?topic=${encodeURIComponent(topic)}&n=${n}`);
-    const j = await res.json();
-    status.innerHTML = `Source: ${j.source || 'grok'} — found ${j.count || (j.tweets && j.tweets.length) || 0} items.`;
-    if (j.error) {
-      results.innerHTML = `<div class="p-4 glass rounded-md text-red-400">Error: ${j.error}</div>`;
-      return;
-    }
-
-    // summary card
-    if (j.summary) {
-      const summaryCard = document.createElement('div');
-      summaryCard.className = "glass p-4 rounded-md";
-      summaryCard.innerHTML = `<h3 class="text-lg font-semibold mb-2">Summary</h3><div class="text-gray-200 whitespace-pre-line">${escapeHtml(j.summary)}</div>`;
-      results.appendChild(summaryCard);
-    }
-
-    // tweets
-    const tweets = j.tweets || [];
-    tweets.forEach(t => {
-      const c = document.createElement('a');
-      c.className = "tweet-card block p-4 glass rounded-md";
-      c.href = t.url || "#";
-      c.target = "_blank";
-      c.innerHTML = `
-        <div class="flex justify-between items-start gap-4">
-          <div style="flex:1">
-            <div class="text-sm text-gray-300 mb-1">${t.author || ''} · ${t.created_at ? new Date(t.created_at).toLocaleString() : ''}</div>
-            <div class="text-base text-white mb-2">${escapeHtml(t.text || '')}</div>
-            <div class="text-sm text-gray-400">${escapeHtml(t.why_selected || '')}</div>
-          </div>
-          <div class="ml-4 text-sm">
-            <div class="text-blue-200 underline tlink">Open</div>
-          </div>
-        </div>
-      `;
-      results.appendChild(c);
-    });
-
-    if (!tweets.length) {
-      results.innerHTML += `<div class="p-4 glass rounded-md text-gray-300">No tweets returned. See summary for text output.</div>`;
-    }
-  } catch (err) {
-    console.error(err);
-    document.getElementById('status').innerText = 'Error fetching Grok results — check server logs.';
-  }
-}
+let lastTopic = null;
+let lastSummary = null;
+let lastResponseRaw = null;
 
 function escapeHtml(s) {
   if (!s) return '';
   return s.replace(/[&<>"']/g, function(m) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]; });
+}
+
+document.getElementById("summaryBtn").onclick = () => {
+  if (!lastSummary) {
+    alert("No summary available yet. Click a topic button to generate tweets & summary first.");
+    return;
+  }
+  const out = document.getElementById("summaryOutput");
+  out.style.display = "block";
+  out.innerHTML = `<h3 style="margin:0 0 8px 0; font-weight:600;">🧠 Overall Summary (last 24 hours)</h3><div style="font-size:0.95rem; color:#e6f2ff">${escapeHtml(lastSummary)}</div>`;
+  // scroll summary into view
+  out.scrollIntoView({behavior:"smooth", block:"center"});
+};
+
+async function fetchGrok(topic) {
+  lastTopic = topic;
+  lastSummary = null;
+  lastResponseRaw = null;
+
+  const n = parseInt(document.getElementById('numSelect').value || '10');
+  const status = document.getElementById('status');
+  const results = document.getElementById('results');
+  results.innerHTML = '';
+  document.getElementById('summaryOutput').style.display = 'none';
+
+  status.innerHTML = `Fetching top ${n} tweets for <strong>${topic}</strong> — loading... <span class="loader">●</span>`;
+
+  // show skeleton placeholders for UX
+  for (let i=0;i<Math.min(n,8);i++){
+    const sk = document.createElement('div');
+    sk.className = 'skeleton';
+    results.appendChild(sk);
+  }
+
+  try {
+    const res = await fetch(`/get_summary?topic=${encodeURIComponent(topic)}&n=${n}`);
+    const j = await res.json();
+    lastResponseRaw = j;
+
+    if (j.error) {
+      results.innerHTML = `<div class="p-4 glass rounded-md text-red-400">Error: ${escapeHtml(j.error)} ${j.content ? '- ' + escapeHtml(j.content) : ''}</div>`;
+      status.innerText = 'Error fetching Grok results — see details above.';
+      return;
+    }
+
+    status.innerHTML = `Source: ${j.source || 'grok'} — found ${j.tweets ? j.tweets.length : 0} items.`;
+
+    // store summary but don't print it until user clicks
+    lastSummary = j.summary || '';
+
+    const tweets = j.tweets || [];
+
+    // Clear skeletons
+    results.innerHTML = '';
+
+    if (!tweets.length) {
+      // fallback: show raw summary text if no tweets
+      results.innerHTML = `<div class="p-4 glass rounded-md text-gray-300">No tweets returned. Summary stored; click "Give Summary with AI" to view.</div>`;
+      return;
+    }
+
+    // Render each tweet in a separate div, sliding in one by one
+    tweets.forEach((t, i) => {
+      // create the card but don't show yet
+      const c = document.createElement('div');
+      c.className = 'tweet-card glass';
+      c.style.transitionDelay = `${i * 80}ms`;
+
+      // content
+      const created = t.created_at ? new Date(t.created_at).toLocaleString() : '';
+      c.innerHTML = `
+        <div class="open-ind">Click to view link</div>
+        <div style="display:flex; gap:12px; align-items:flex-start;">
+          <div style="flex:1">
+            <div class="tweet-meta">${escapeHtml(t.author || '')} · ${escapeHtml(created)}</div>
+            <div class="tweet-text">${escapeHtml(t.text || '')}</div>
+            <div class="why-selected">${escapeHtml(t.why_selected || '')}</div>
+          </div>
+        </div>
+
+        <div class="tweet-link-row">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+            <div style="font-size:0.9rem; color:#bfe3ff; overflow-wrap:anywhere;">${t.url ? `<a class="tlink" href="${escapeHtml(t.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t.url)}</a>` : '<span style="color:#98C0D8">No URL provided</span>'}</div>
+            ${t.url ? `<button class="glass" style="padding:6px 10px; border-radius:8px;" onclick="window.open('${escapeHtml(t.url)}','_blank')">Open Tweet</button>` : ''}
+          </div>
+        </div>
+      `;
+
+      // toggle open/close link row on click
+      c.addEventListener('click', (ev) => {
+        // avoid triggering open when link/button is clicked
+        const tag = ev.target.tagName.toLowerCase();
+        if (tag === 'a' || tag === 'button') return;
+        c.classList.toggle('open');
+      });
+
+      // Append but stagger the reveal
+      results.appendChild(c);
+
+      // staggered add 'show' class so they slide in one by one
+      setTimeout(() => {
+        c.classList.add('show');
+      }, i * 110);
+    });
+
+  } catch (err) {
+    console.error(err);
+    document.getElementById('status').innerText = 'Error fetching Grok results — check server logs.';
+    const results = document.getElementById('results');
+    results.innerHTML = `<div class="p-4 glass rounded-md text-red-400">Network or server error. ${escapeHtml(err.message || String(err))}</div>`;
+  }
 }
 </script>
 </body>
