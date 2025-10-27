@@ -7,31 +7,30 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
-      background: radial-gradient(circle at 10% 20%, #071029, #0f2b3a 40%, #132f3f 80%);
+      background: radial-gradient(circle at 20% 20%, #3A3937, #2e2d2c 50%, #1f1e1d 90%);
       font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
       min-height: 100vh;
-      display:flex;
-      justify-content:center;
-      align-items:flex-start;
-      padding:40px;
-      color:#fff;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 40px;
+      color: #fefcf8;
     }
     .glass {
-      background: rgba(255,255,255,0.06);
+      background: rgba(255, 255, 255, 0.06);
       backdrop-filter: blur(18px) saturate(130%);
       border-radius: 14px;
-      border: 1px solid rgba(255,255,255,0.06);
-      box-shadow: 0 10px 40px rgba(2,6,23,0.6);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
     }
     .topic-btn { transition: transform .18s ease, box-shadow .18s ease; }
-    .topic-btn:hover { transform: translateY(-6px); box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    .topic-btn:hover { transform: translateY(-6px); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6); }
     .tweet-card { transition: transform .14s ease, box-shadow .14s ease; }
     .tweet-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
-    a.tlink { color: #bfe3ff; text-decoration: none; }
-    .loader { animation: pulse 1.2s infinite; }
+    a.tlink { color: #c89b26; text-decoration: none; }
+    .loader { animation: pulse 1.2s infinite; color: #c89b26; }
     @keyframes pulse { 0% {opacity:0.5} 50% {opacity:1} 100% {opacity:0.5} }
 
-    /* slide-down reveal for cards */
     .tweet-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
     .tweet-card {
       opacity: 0;
@@ -41,16 +40,15 @@
       border-radius: 12px;
       overflow: hidden;
       position: relative;
+      background: rgba(58, 57, 55, 0.6);
+      border: 1px solid rgba(200, 155, 38, 0.2);
     }
-    .tweet-card.show {
-      animation: slideIn .42s cubic-bezier(.22,.9,.32,1) forwards;
-    }
+    .tweet-card.show { animation: slideIn .42s cubic-bezier(.22,.9,.32,1) forwards; }
     @keyframes slideIn {
       from { opacity: 0; transform: translateY(-16px) scale(0.995); }
-      to   { opacity: 1; transform: translateY(0) scale(1); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
     }
 
-    /* reveal the link area when card is clicked */
     .tweet-link-row {
       max-height: 0;
       transition: max-height .28s cubic-bezier(.2,.9,.3,1), opacity .28s;
@@ -63,16 +61,14 @@
       opacity: 1;
     }
 
-    /* small styling */
-    .tweet-meta { font-size: 0.88rem; color: #cbd5e1; }
-    .tweet-text { font-size: 1rem; color: #e6f2ff; margin-top: 6px; white-space: pre-wrap; }
-    .why-selected { margin-top: 8px; font-size: 0.86rem; color: #a8c4d8; }
+    .tweet-meta { font-size: 0.88rem; color: #f2e7c9; }
+    .tweet-text { font-size: 1rem; color: #fff7e3; margin-top: 6px; white-space: pre-wrap; }
+    .why-selected { margin-top: 8px; font-size: 0.86rem; color: #d8c38b; }
 
-    /* skeleton placeholders while generating */
     .skeleton {
       height: 76px;
       border-radius: 10px;
-      background: linear-gradient(90deg, rgba(255,255,255,0.03), rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+      background: linear-gradient(90deg, rgba(255,255,255,0.05), rgba(255,255,255,0.12), rgba(255,255,255,0.05));
       animation: skeletonPulse 1.2s infinite;
     }
     @keyframes skeletonPulse {
@@ -81,28 +77,35 @@
       100% { opacity: 0.45 }
     }
 
-    /* Small 'open' indicator */
     .open-ind {
       position: absolute;
       right: 12px;
       top: 12px;
       font-size: 0.8rem;
-      color: #bfe3ff;
+      color: #c89b26;
       opacity: 0.9;
     }
 
-    /* summary output container */
     #summaryOutput {
       margin-top: 14px;
-      background: rgba(0,0,0,0.18);
+      background: rgba(255, 255, 255, 0.05);
       padding: 12px;
       border-radius: 10px;
-      color: #e8f3ff;
-      display: none; /* initially hidden; shown when user clicks Give Summary with AI */
+      color: #fff9e8;
+      display: none;
       white-space: pre-wrap;
+      border: 1px solid rgba(200, 155, 38, 0.25);
     }
 
-    /* small responsive tweaks */
+    select, button {
+      color: #fefcf8;
+      border: 1px solid rgba(200, 155, 38, 0.3);
+    }
+
+    button.glass {
+      background: linear-gradient(135deg, rgba(200, 155, 38, 0.15), rgba(255, 255, 255, 0.05));
+    }
+
     @media (min-width: 768px) {
       .tweet-grid { grid-template-columns: 1fr 1fr; gap: 14px; }
     }
@@ -112,158 +115,131 @@
   <div class="w-full max-w-6xl glass p-6">
     <header class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-3xl font-semibold">🧠 Twitter AI News — Grok Powered</h1>
-        <p class="text-sm text-gray-300 mt-1">Choose topic and how many top tweets to fetch (last 24 hours). Grok will return tweets with links + a concise summary.</p>
+        <h1 class="text-3xl font-semibold text-[#c89b26]">Twitter Intelligent News</h1>
+        <p class="text-sm text-[#f2e7c9] mt-1">Choose topic and how many top tweets to fetch (last 24 hours). Grok will return tweets with links</p>
       </div>
       <div class="flex items-center gap-3">
-        <label class="text-sm text-gray-300">Top</label>
-        <select id="numSelect" class="p-2 rounded-md bg-black/30">
+        <label class="text-sm text-[#f2e7c9]">Top</label>
+        <select id="numSelect" class="p-2 rounded-md bg-[#3A3937]/80">
           <option>5</option><option selected>10</option><option>12</option><option>15</option>
         </select>
       </div>
     </header>
 
     <div class="flex flex-wrap gap-3 mb-6">
-      <button class="topic-btn glass px-4 py-2 rounded-lg" style="background:linear-gradient(135deg, rgba(255,90,95,0.12), rgba(255,152,162,0.06));" onclick="fetchGrok('cyber')">Cyber Attacks</button>
-      <button class="topic-btn glass px-4 py-2 rounded-lg" style="background:linear-gradient(135deg, rgba(70,130,255,0.08), rgba(150,200,255,0.04));" onclick="fetchGrok('regulation')">Regulation</button>
-      <button class="topic-btn glass px-4 py-2 rounded-lg" style="background:linear-gradient(135deg, rgba(200,120,255,0.08), rgba(230,180,255,0.04));" onclick="fetchGrok('ai')">AI</button>
-      <button class="topic-btn glass px-4 py-2 rounded-lg" style="background:linear-gradient(135deg, rgba(88,222,168,0.08), rgba(180,255,220,0.03));" onclick="fetchGrok('ma')">M&A</button>
-      <button class="topic-btn glass px-4 py-2 rounded-lg" style="background:linear-gradient(135deg, rgba(255,210,100,0.06), rgba(255,240,160,0.03));" onclick="fetchGrok('market')">Market</button>
-      <button class="topic-btn glass px-4 py-2 rounded-lg" style="background:linear-gradient(135deg, rgba(255,160,80,0.08), rgba(255,200,160,0.03));" onclick="fetchGrok('audit')">Audit Firms</button>
+      <button class="topic-btn glass px-4 py-2 rounded-lg" style="background:linear-gradient(135deg,#c89b2622,#c89b260f);" onclick="fetchGrok('cyber')">Cyber Attacks</button>
+      <button class="topic-btn glass px-4 py-2 rounded-lg" style="background:linear-gradient(135deg,#d4aa3240,#3A393710);" onclick="fetchGrok('regulation')">Regulation</button>
+      <button class="topic-btn glass px-4 py-2 rounded-lg" style="background:linear-gradient(135deg,#b0832040,#3A393710);" onclick="fetchGrok('ai')">AI</button>
+      <button class="topic-btn glass px-4 py-2 rounded-lg" style="background:linear-gradient(135deg,#e5bf4050,#3A393710);" onclick="fetchGrok('ma')">M&A</button>
+      <button class="topic-btn glass px-4 py-2 rounded-lg" style="background:linear-gradient(135deg,#c89b2640,#3A393710);" onclick="fetchGrok('market')">Market</button>
+      <button class="topic-btn glass px-4 py-2 rounded-lg" style="background:linear-gradient(135deg,#bba2623a,#3A393710);" onclick="fetchGrok('audit')">Audit Firms</button>
     </div>
 
-    <div id="status" class="text-sm text-gray-300 mb-4"></div>
-
+    <div id="status" class="text-sm text-[#f2e7c9] mb-4"></div>
     <div id="results" class="tweet-grid"></div>
 
     <div class="mt-6 flex items-center gap-3">
       <button id="summaryBtn" class="glass px-4 py-2 rounded-md">Give Summary with AI</button>
-      <div id="summaryHint" class="text-sm text-gray-300">Summary is generated but hidden until you click the button.</div>
+      <div id="summaryHint" class="text-sm text-[#f2e7c9]">Summary is generated when you click the button.</div>
     </div>
 
     <div id="summaryOutput" class="glass mt-4 p-4"></div>
   </div>
 
-<script>
-let lastTopic = null;
-let lastSummary = null;
-let lastResponseRaw = null;
+  <script>
+    let lastTopic = null;
+    let lastSummary = null;
+    let lastResponseRaw = null;
 
-function escapeHtml(s) {
-  if (!s) return '';
-  return s.replace(/[&<>"']/g, function(m) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]; });
-}
-
-document.getElementById("summaryBtn").onclick = () => {
-  if (!lastSummary) {
-    alert("No summary available yet. Click a topic button to generate tweets & summary first.");
-    return;
-  }
-  const out = document.getElementById("summaryOutput");
-  out.style.display = "block";
-  out.innerHTML = `<h3 style="margin:0 0 8px 0; font-weight:600;">🧠 Overall Summary (last 24 hours)</h3><div style="font-size:0.95rem; color:#e6f2ff">${escapeHtml(lastSummary)}</div>`;
-  // scroll summary into view
-  out.scrollIntoView({behavior:"smooth", block:"center"});
-};
-
-async function fetchGrok(topic) {
-  lastTopic = topic;
-  lastSummary = null;
-  lastResponseRaw = null;
-
-  const n = parseInt(document.getElementById('numSelect').value || '10');
-  const status = document.getElementById('status');
-  const results = document.getElementById('results');
-  results.innerHTML = '';
-  document.getElementById('summaryOutput').style.display = 'none';
-
-  status.innerHTML = `Fetching top ${n} tweets for <strong>${topic}</strong> — loading... <span class="loader">●</span>`;
-
-  // show skeleton placeholders for UX
-  for (let i=0;i<Math.min(n,8);i++){
-    const sk = document.createElement('div');
-    sk.className = 'skeleton';
-    results.appendChild(sk);
-  }
-
-  try {
-    const res = await fetch(`/get_summary?topic=${encodeURIComponent(topic)}&n=${n}`);
-    const j = await res.json();
-    lastResponseRaw = j;
-
-    if (j.error) {
-      results.innerHTML = `<div class="p-4 glass rounded-md text-red-400">Error: ${escapeHtml(j.error)} ${j.content ? '- ' + escapeHtml(j.content) : ''}</div>`;
-      status.innerText = 'Error fetching Grok results — see details above.';
-      return;
+    function escapeHtml(s) {
+      if (!s) return '';
+      return s.replace(/[&<>"']/g, function(m) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]; });
     }
 
-    status.innerHTML = `Source: ${j.source || 'grok'} — found ${j.tweets ? j.tweets.length : 0} items.`;
+    document.getElementById("summaryBtn").onclick = () => {
+      if (!lastSummary) {
+        alert("No summary available yet. Click a topic button to generate tweets & summary first.");
+        return;
+      }
+      const out = document.getElementById("summaryOutput");
+      out.style.display = "block";
+      out.innerHTML = `<h3 style="margin:0 0 8px 0; font-weight:600; color:#c89b26;">🧠 Overall Summary (last 24 hours)</h3><div style="font-size:0.95rem;">${escapeHtml(lastSummary)}</div>`;
+      out.scrollIntoView({behavior:"smooth", block:"center"});
+    };
 
-    // store summary but don't print it until user clicks
-    lastSummary = j.summary || '';
+    async function fetchGrok(topic) {
+      lastTopic = topic;
+      lastSummary = null;
+      lastResponseRaw = null;
+      const n = parseInt(document.getElementById('numSelect').value || '10');
+      const status = document.getElementById('status');
+      const results = document.getElementById('results');
+      results.innerHTML = '';
+      document.getElementById('summaryOutput').style.display = 'none';
 
-    const tweets = j.tweets || [];
+      status.innerHTML = `Fetching top ${n} tweets for <strong>${topic}</strong> — loading... <span class="loader">●</span>`;
+      for (let i = 0; i < Math.min(n, 8); i++) {
+        const sk = document.createElement('div');
+        sk.className = 'skeleton';
+        results.appendChild(sk);
+      }
 
-    // Clear skeletons
-    results.innerHTML = '';
+      try {
+        const res = await fetch(`/get_summary?topic=${encodeURIComponent(topic)}&n=${n}`);
+        const j = await res.json();
+        lastResponseRaw = j;
 
-    if (!tweets.length) {
-      // fallback: show raw summary text if no tweets
-      results.innerHTML = `<div class="p-4 glass rounded-md text-gray-300">No tweets returned. Summary stored; click "Give Summary with AI" to view.</div>`;
-      return;
+        if (j.error) {
+          results.innerHTML = `<div class="p-4 glass rounded-md text-red-400">Error: ${escapeHtml(j.error)} ${j.content ? '- ' + escapeHtml(j.content) : ''}</div>`;
+          status.innerText = 'Error fetching Grok results — see details above.';
+          return;
+        }
+
+        status.innerHTML = `Source: ${j.source || 'grok'} — found ${j.tweets ? j.tweets.length : 0} items.`;
+        lastSummary = j.summary || '';
+        const tweets = j.tweets || [];
+        results.innerHTML = '';
+
+        if (!tweets.length) {
+          results.innerHTML = `<div class="p-4 glass rounded-md text-gray-300">No tweets returned. Summary stored; click "Give Summary with AI" to view.</div>`;
+          return;
+        }
+
+        tweets.forEach((t, i) => {
+          const c = document.createElement('div');
+          c.className = 'tweet-card glass';
+          c.style.transitionDelay = `${i * 80}ms`;
+
+          const created = t.created_at ? new Date(t.created_at).toLocaleString() : '';
+          c.innerHTML = `
+            <div class="open-ind">Click to view link</div>
+            <div style="display:flex; gap:12px; align-items:flex-start;">
+              <div style="flex:1">
+                <div class="tweet-meta">${escapeHtml(t.author || '')} · ${escapeHtml(created)}</div>
+                <div class="tweet-text">${escapeHtml(t.text || '')}</div>
+                <div class="why-selected">${escapeHtml(t.why_selected || '')}</div>
+              </div>
+            </div>
+            <div class="tweet-link-row">
+              <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                <div style="font-size:0.9rem; color:#c89b26; overflow-wrap:anywhere;">${t.url ? `<a class="tlink" href="${escapeHtml(t.url)}" target="_blank">${escapeHtml(t.url)}</a>` : '<span style="color:#d8c38b">No URL provided</span>'}</div>
+                ${t.url ? `<button class="glass" style="padding:6px 10px; border-radius:8px;" onclick="window.open('${escapeHtml(t.url)}','_blank')">Open Tweet</button>` : ''}
+              </div>
+            </div>`;
+          c.addEventListener('click', (ev) => {
+            const tag = ev.target.tagName.toLowerCase();
+            if (tag === 'a' || tag === 'button') return;
+            c.classList.toggle('open');
+          });
+          results.appendChild(c);
+          setTimeout(() => c.classList.add('show'), i * 110);
+        });
+      } catch (err) {
+        console.error(err);
+        document.getElementById('status').innerText = 'Error fetching Grok results — check server logs.';
+        results.innerHTML = `<div class="p-4 glass rounded-md text-red-400">Network or server error. ${escapeHtml(err.message || String(err))}</div>`;
+      }
     }
-
-    // Render each tweet in a separate div, sliding in one by one
-    tweets.forEach((t, i) => {
-      // create the card but don't show yet
-      const c = document.createElement('div');
-      c.className = 'tweet-card glass';
-      c.style.transitionDelay = `${i * 80}ms`;
-
-      // content
-      const created = t.created_at ? new Date(t.created_at).toLocaleString() : '';
-      c.innerHTML = `
-        <div class="open-ind">Click to view link</div>
-        <div style="display:flex; gap:12px; align-items:flex-start;">
-          <div style="flex:1">
-            <div class="tweet-meta">${escapeHtml(t.author || '')} · ${escapeHtml(created)}</div>
-            <div class="tweet-text">${escapeHtml(t.text || '')}</div>
-            <div class="why-selected">${escapeHtml(t.why_selected || '')}</div>
-          </div>
-        </div>
-
-        <div class="tweet-link-row">
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-            <div style="font-size:0.9rem; color:#bfe3ff; overflow-wrap:anywhere;">${t.url ? `<a class="tlink" href="${escapeHtml(t.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t.url)}</a>` : '<span style="color:#98C0D8">No URL provided</span>'}</div>
-            ${t.url ? `<button class="glass" style="padding:6px 10px; border-radius:8px;" onclick="window.open('${escapeHtml(t.url)}','_blank')">Open Tweet</button>` : ''}
-          </div>
-        </div>
-      `;
-
-      // toggle open/close link row on click
-      c.addEventListener('click', (ev) => {
-        // avoid triggering open when link/button is clicked
-        const tag = ev.target.tagName.toLowerCase();
-        if (tag === 'a' || tag === 'button') return;
-        c.classList.toggle('open');
-      });
-
-      // Append but stagger the reveal
-      results.appendChild(c);
-
-      // staggered add 'show' class so they slide in one by one
-      setTimeout(() => {
-        c.classList.add('show');
-      }, i * 110);
-    });
-
-  } catch (err) {
-    console.error(err);
-    document.getElementById('status').innerText = 'Error fetching Grok results — check server logs.';
-    const results = document.getElementById('results');
-    results.innerHTML = `<div class="p-4 glass rounded-md text-red-400">Network or server error. ${escapeHtml(err.message || String(err))}</div>`;
-  }
-}
-</script>
+  </script>
 </body>
 </html>
