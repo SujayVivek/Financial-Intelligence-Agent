@@ -5,7 +5,11 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Twitter AI News + Grok</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@2.4.0/dist/purify.min.js"></script>
+
   <style>
+    /* (your original styles unchanged) */
     body {
       background: radial-gradient(circle at 20% 20%, #3A3937, #2e2d2c 50%, #1f1e1d 90%);
       font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
@@ -109,53 +113,436 @@
     @media (min-width: 768px) {
       .tweet-grid { grid-template-columns: 1fr 1fr; gap: 14px; }
     }
+
+    /* Navbar styling (keeps in-theme) */
+    .nav {
+      display:flex;
+      gap:8px;
+      align-items:center;
+      margin-bottom: 14px;
+    }
+    .nav button {
+      padding:8px 12px;
+      border-radius:10px;
+      background: transparent;
+      cursor:pointer;
+      font-weight:600;
+    }
+    .nav button.active {
+      background: linear-gradient(135deg,#c89b26aa,#c89b260f);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.45);
+    }
+    .exec-panel { display: none; }
+    .exec-panel.show { display: block; }
+        /* Exec cards */
+    .exec-doc .glass { background: rgba(40,38,36,0.45); border-radius:12px; padding:12px; }
+
+    /* Table style tweak */
+    .exec-doc table th { background: rgba(200,155,38,0.06); }
+    .exec-doc table td { background: transparent; }
+    .exec-doc table tr:nth-child(even) td { opacity: 0.98; }
+
+    /* Executive document area */
+    .exec-doc {
+      white-space: pre-wrap;
+      max-height: 520px;
+      overflow: auto;
+      padding: 14px;
+      border-radius: 10px;
+      background: rgba(30,30,30,0.25);
+      border: 1px solid rgba(200,155,38,0.12);
+      color: #fff9e8;
+    }
+    .sources-list { margin-top: 10px; font-size:0.92rem; color:#f2e7c9; }
+    /* Markdown styling to match theme */
+    .markdown-body {
+      color: #fff9e8;
+      line-height: 1.5;
+      font-size: 0.96rem;
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      padding: 12px;
+    }
+
+    /* Headings */
+    .markdown-body h1,
+    .markdown-body h2,
+    .markdown-body h3,
+    .markdown-body h4 {
+      color: #c89b26;
+      margin-top: 10px;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+
+    /* Paragraphs and lists */
+    .markdown-body p { margin: 8px 0; color: #fff9e8; }
+    .markdown-body ul, .markdown-body ol { margin-left: 18px; color: #fff9e8; }
+
+    /* Blockquote */
+    .markdown-body blockquote {
+      border-left: 3px solid rgba(200,155,38,0.18);
+      padding-left: 12px;
+      margin: 8px 0;
+      color: #f2e7c9;
+      background: rgba(58,57,55,0.18);
+      border-radius: 6px;
+    }
+
+    /* Links */
+    .markdown-body a { color: #c89b26; text-decoration: none; }
+    .markdown-body a:hover { text-decoration: underline; }
+
+    /* Code blocks */
+    .markdown-body pre {
+      background: rgba(0,0,0,0.45);
+      padding: 10px;
+      border-radius: 8px;
+      overflow: auto;
+      color: #f8f8f2;
+      margin: 8px 0;
+    }
+    .markdown-body code {
+      background: rgba(255,255,255,0.03);
+      padding: 2px 6px;
+      border-radius: 6px;
+      color: #fff9e8;
+    }
+
+    /* Tables (match site theme) */
+    .markdown-body table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      margin-bottom: 10px;
+    }
+    .markdown-body th {
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      color: #f2e7c9;
+      background: rgba(200,155,38,0.04);
+    }
+    .markdown-body td {
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      color: #fff9e8;
+    }
+
+    /* make images responsive */
+    .markdown-body img { max-width: 100%; height: auto; border-radius: 6px; }
+
+    /* small wrapper tweaks */
+    .exec-doc .markdown-body { background: transparent; padding: 6px; }
+
   </style>
 </head>
 <body>
   <div class="w-full max-w-6xl glass p-6">
-    <header class="flex items-center justify-between mb-6">
-      <div>
-        <h1 class="text-3xl font-semibold text-[#c89b26]">Twitter Intelligent News</h1>
-        <p class="text-sm text-[#f2e7c9] mt-1">Choose topic and how many top tweets to fetch (last 24 hours). Grok will return tweets with links</p>
-      </div>
-      <div class="flex items-center gap-3">
-        <label class="text-sm text-[#f2e7c9]">Top</label>
-        <select id="numSelect" class="p-2 rounded-md bg-[#3A3937]/80">
-          <option>5</option><option selected>10</option><option>12</option><option>15</option>
-        </select>
-      </div>
-    </header>
-
-    <div class="flex flex-wrap gap-3 mb-6">
-      <button class="topic-btn glass px-4 py-2 rounded-lg" style="background:linear-gradient(135deg,#c89b2622,#c89b260f);" onclick="fetchGrok('cyber')">Cyber Attacks</button>
-      <button class="topic-btn glass px-4 py-2 rounded-lg" style="background:linear-gradient(135deg,#d4aa3240,#3A393710);" onclick="fetchGrok('regulation')">Regulation</button>
-      <button class="topic-btn glass px-4 py-2 rounded-lg" style="background:linear-gradient(135deg,#b0832040,#3A393710);" onclick="fetchGrok('ai')">AI</button>
-      <button class="topic-btn glass px-4 py-2 rounded-lg" style="background:linear-gradient(135deg,#e5bf4050,#3A393710);" onclick="fetchGrok('ma')">M&A</button>
-      <button class="topic-btn glass px-4 py-2 rounded-lg" style="background:linear-gradient(135deg,#c89b2640,#3A393710);" onclick="fetchGrok('market')">Market</button>
-      <button class="topic-btn glass px-4 py-2 rounded-lg" style="background:linear-gradient(135deg,#bba2623a,#3A393710);" onclick="fetchGrok('audit')">Audit Firms</button>
+    <!-- NAVBAR -->
+    <div class="nav mb-4">
+      <button id="navExec" class="glass active">Executive Summary</button>
+      <button id="navTweets" class="glass">Tweet Retrieve</button>
+      <div style="flex:1"></div>
+      <div style="font-size:0.9rem; color:#f2e7c9">Last 24 hours • Gulf region</div>
     </div>
 
-    <div id="status" class="text-sm text-[#f2e7c9] mb-4"></div>
-    <div id="results" class="tweet-grid"></div>
+    <!-- EXECUTIVE SUMMARY PANEL (default visible) -->
+    <div id="execPanel" class="exec-panel show">
+      <header class="flex items-center justify-between mb-4">
+        <div>
+          <h1 class="text-3xl font-semibold text-[#c89b26]">Executive Summary</h1>
+          <p class="text-sm text-[#f2e7c9] mt-1">Click “Generate AI Summary Document” to produce the pack.</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <button id="generateExec" class="glass px-4 py-2 rounded-md">Generate AI Summary Document</button>
+          <button id="copyExec" class="glass px-4 py-2 rounded-md">Copy All</button>
+        </div>
+      </header>
 
-    <div class="mt-6 flex items-center gap-3">
-      <button id="summaryBtn" class="glass px-4 py-2 rounded-md">Give Summary with AI</button>
-      <div id="summaryHint" class="text-sm text-[#f2e7c9]">Summary is generated when you click the button.</div>
+      <div id="execStatus" class="text-sm text-[#f2e7c9] mb-4">No document generated yet.</div>
+
+      <div id="execDocContainer">
+        <div id="execDoc" class="exec-doc">Press "Generate AI Summary Document" to fetch the Executive Pack.</div>
+        <div id="execHighlights" class="mt-3 text-sm text-[#f2e7c9]"></div>
+        <div id="execSources" class="sources-list"></div>
+      </div>
     </div>
 
-    <div id="summaryOutput" class="glass mt-4 p-4"></div>
+    <!-- TWEET RETRIEVE PANEL (existing UI) -->
+    <div id="tweetPanel" style="display:none;">
+      <header class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="text-3xl font-semibold text-[#c89b26]">Twitter Intelligent News</h1>
+          <p class="text-sm text-[#f2e7c9] mt-1">Choose topic and how many top tweets to fetch (last 24 hours). Grok will return tweets with links</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <label class="text-sm text-[#f2e7c9]">Top</label>
+          <select id="numSelect" class="p-2 rounded-md bg-[#3A3937]/80">
+            <option>5</option><option selected>10</option><option>12</option><option>15</option>
+          </select>
+        </div>
+      </header>
+
+      <div class="flex flex-wrap gap-3 mb-6">
+        <button class="topic-btn glass px-4 py-2 rounded-lg" style="background:linear-gradient(135deg,#c89b2622,#c89b260f);" onclick="fetchGrok('cyber')">Cyber Attacks</button>
+        <button class="topic-btn glass px-4 py-2 rounded-lg" style="background:linear-gradient(135deg,#d4aa3240,#3A393710);" onclick="fetchGrok('regulation')">Regulation</button>
+        <button class="topic-btn glass px-4 py-2 rounded-lg" style="background:linear-gradient(135deg,#b0832040,#3A393710);" onclick="fetchGrok('ai')">AI</button>
+        <button class="topic-btn glass px-4 py-2 rounded-lg" style="background:linear-gradient(135deg,#e5bf4050,#3A393710);" onclick="fetchGrok('ma')">M&A</button>
+        <button class="topic-btn glass px-4 py-2 rounded-lg" style="background:linear-gradient(135deg,#c89b2640,#3A393710);" onclick="fetchGrok('market')">Market</button>
+        <button class="topic-btn glass px-4 py-2 rounded-lg" style="background:linear-gradient(135deg,#bba2623a,#3A393710);" onclick="fetchGrok('audit')">Audit Firms</button>
+      </div>
+
+      <div id="status" class="text-sm text-[#f2e7c9] mb-4"></div>
+      <div id="results" class="tweet-grid"></div>
+
+      <div class="mt-6 flex items-center gap-3">
+        <button id="summaryBtn" class="glass px-4 py-2 rounded-md">Give Summary with AI</button>
+        <div id="summaryHint" class="text-sm text-[#f2e7c9]">Summary is generated when you click the button.</div>
+      </div>
+
+      <div id="summaryOutput" class="glass mt-4 p-4"></div>
+    </div>
   </div>
 
   <script>
-    let lastTopic = null;
-    let lastSummary = null;
-    let lastResponseRaw = null;
+    /* --------------- Helpers (moved to top so they're available) ---------------- */
 
     function escapeHtml(s) {
       if (!s) return '';
       return s.replace(/[&<>"']/g, function(m) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]; });
     }
 
+    function sanitizeDocumentText(raw) {
+      if (!raw) return '';
+      // Remove common salutations/openers like "Hello", "Hi," "Dear ..."
+      raw = raw.replace(/^\s*(hello|hi|dear|greetings)[^\n]*\n+/i, '');
+      raw = raw.replace(/^\s*(executive briefing pack[:\s]*)/i, (m)=> m.trim()); // keep title if present
+      // Remove stray "This briefing summarizes..." preface lines that start with "This briefing"
+      raw = raw.replace(/^\s*This briefing[^\n]*\n/i, '');
+      // Collapse >2 blank lines to 2
+      raw = raw.replace(/(\n\s*){3,}/g, '\n\n');
+      return raw.trim();
+    }
+
+    function stripLeadingPreamble(text) {
+      if (!text) return '';
+      // remove salutations like "Hello," or "Hi," at the top
+      text = text.replace(/^\s*(Hello|Hi|Dear|Greetings)[^\n]*\n+/i, '');
+      // remove accidental "Executive Briefing Pack: ..." duplicate headings (normalize to H1)
+      text = text.replace(/^\s*Executive\s+Briefing\s+Pack[:\s\-–—]*([^\n]*)\n*/i, (m, p1) => {
+        return (p1 && p1.trim()) ? `# Executive Briefing Pack — ${p1.trim()}\n\n` : '# Executive Briefing Pack\n\n';
+      });
+      // collapse many blank lines
+      text = text.replace(/(\n\s*){3,}/g, '\n\n');
+      return text.trim();
+    }
+
+    function renderTableIntoEl(tableObj) {
+      const div = document.createElement('div');
+      div.className = 'glass p-3 mb-3';
+      div.style.border = '1px solid rgba(200,155,38,0.12)';
+      if (tableObj.title) {
+        const h = document.createElement('div');
+        h.style.fontWeight = 700;
+        h.style.color = '#c89b26';
+        h.style.marginBottom = '8px';
+        h.innerText = tableObj.title;
+        div.appendChild(h);
+      }
+      const table = document.createElement('table');
+      table.style.width = '100%';
+      table.style.borderCollapse = 'collapse';
+      table.style.fontSize = '0.92rem';
+      const thead = document.createElement('thead');
+      const thr = document.createElement('tr');
+      (tableObj.headers || []).forEach(h => {
+        const th = document.createElement('th');
+        th.style.textAlign = 'left';
+        th.style.padding = '8px 10px';
+        th.style.borderBottom = '1px solid rgba(255,255,255,0.06)';
+        th.style.color = '#f2e7c9';
+        th.innerText = h;
+        thr.appendChild(th);
+      });
+      thead.appendChild(thr);
+      table.appendChild(thead);
+      const tbody = document.createElement('tbody');
+      (tableObj.rows || []).forEach(row => {
+        const tr = document.createElement('tr');
+        row.forEach(cell => {
+          const td = document.createElement('td');
+          td.style.padding = '8px 10px';
+          td.style.borderBottom = '1px solid rgba(255,255,255,0.03)';
+          td.style.color = '#fff9e8';
+          td.style.verticalAlign = 'top';
+          td.innerText = String(cell || '');
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      div.appendChild(table);
+      return div;
+    }
+
+    // Markdown renderer + sanitizer
+    function renderExecMarkdown(documentMd, tables, highlights, sources) {
+      const md = (documentMd && documentMd.length) ? stripLeadingPreamble(documentMd) : '';
+      if (!md) {
+        execDocEl.innerHTML = '<div style="color:#f2e7c9">No document returned.</div>';
+        execHighlights.innerHTML = '';
+        execSources.innerHTML = '';
+        return;
+      }
+
+      let rawHtml;
+      try {
+        rawHtml = marked.parse(md);
+      } catch (err) {
+        rawHtml = '<pre>' + escapeHtml(md) + '</pre>';
+      }
+
+      const clean = DOMPurify.sanitize(rawHtml, {
+        ADD_TAGS: ['table','thead','tbody','tfoot','style'],
+        ALLOWED_ATTR: ['href','target','class','style']
+      });
+
+      execDocEl.innerHTML = '';
+      const wrapper = document.createElement('div');
+      wrapper.className = 'markdown-body';
+      wrapper.innerHTML = clean;
+      execDocEl.appendChild(wrapper);
+
+      // append structured tables if present
+      if (Array.isArray(tables) && tables.length) {
+        const ttl = document.createElement('div');
+        ttl.style.marginTop = '10px';
+        ttl.style.fontWeight = 700;
+        ttl.style.color = '#c89b26';
+        ttl.innerText = 'Structured Tables';
+        execDocEl.appendChild(ttl);
+
+        tables.forEach(tbl => {
+          const el = renderTableIntoEl(tbl);
+          execDocEl.appendChild(el);
+        });
+      }
+
+      // highlights & sources handled outside (caller can populate)
+    }
+
+    /* --------------- End helpers ---------------- */
+
+    let lastTopic = null;
+    let lastSummary = null;
+    let lastResponseRaw = null;
+
+    // NAV behavior
+    const navExec = document.getElementById('navExec');
+    const navTweets = document.getElementById('navTweets');
+    const execPanel = document.getElementById('execPanel');
+    const tweetPanel = document.getElementById('tweetPanel');
+
+    function showExec() {
+      navExec.classList.add('active');
+      navTweets.classList.remove('active');
+      execPanel.classList.add('show');
+      tweetPanel.style.display = 'none';
+    }
+    function showTweets() {
+      navExec.classList.remove('active');
+      navTweets.classList.add('active');
+      execPanel.classList.remove('show');
+      tweetPanel.style.display = 'block';
+    }
+
+    navExec.addEventListener('click', () => { showExec(); });
+    navTweets.addEventListener('click', () => { showTweets(); });
+
+    // default: show executive
+    showExec();
+
+    // Exec DOM refs & buttons
+    const execDocEl = document.getElementById('execDoc');
+    const execStatus = document.getElementById('execStatus');
+    const execHighlights = document.getElementById('execHighlights');
+    const execSources = document.getElementById('execSources');
+    const generateExecBtn = document.getElementById('generateExec');
+    const copyExecBtn = document.getElementById('copyExec');
+
+    generateExecBtn.onclick = async () => {
+      execStatus.innerHTML = 'Generating Executive Briefing Pack — loading... <span class="loader">●</span>';
+      execDocEl.innerText = '';
+      execHighlights.innerHTML = '';
+      execSources.innerHTML = '';
+
+      try {
+        const res = await fetch(`/get_exec_summary`);
+        const j = await res.json();
+
+        if (j.error) {
+          execStatus.innerHTML = `Error: ${escapeHtml(j.error)}`;
+          execDocEl.innerText = 'Error generating document. See status above.';
+          return;
+        }
+
+        // Render markdown content (document), sanitized
+        renderExecMarkdown(j.document || j.raw_content || '', j.tables || [], j.highlights || [], j.sources || []);
+        execStatus.innerText = `Source: ${j.source || 'grok'}`;
+
+        // highlights (if provided)
+        if (Array.isArray(j.highlights) && j.highlights.length) {
+          execHighlights.innerHTML = '<strong style="color:#c89b26">Highlights:</strong><ul style="margin-top:6px;">' +
+            j.highlights.map(h => `<li style="margin-top:6px;">${escapeHtml(h)}</li>`).join('') + '</ul>';
+        } else {
+          execHighlights.innerHTML = '';
+        }
+
+        // sources
+        if (Array.isArray(j.sources) && j.sources.length) {
+          execSources.innerHTML = '<strong style="color:#c89b26">Sources:</strong><div style="margin-top:6px;">' +
+            j.sources.map(s => {
+              const title = escapeHtml(s.title || s.url || 'source');
+              const url = escapeHtml(s.url || '');
+              return url ? `<div style="margin-top:6px;"><a class="tlink" href="${url}" target="_blank">${title}</a></div>` : `<div>${title}</div>`;
+            }).join('') + '</div>';
+        } else {
+          execSources.innerHTML = '';
+        }
+
+      } catch (err) {
+        console.error(err);
+        execStatus.innerText = 'Network or server error while generating executive summary.';
+        execDocEl.innerText = `Error: ${escapeHtml(err.message || String(err))}`;
+      }
+    };
+
+    copyExecBtn.onclick = async () => {
+      const text = execDocEl.innerText || '';
+      if (!text) {
+        alert('Nothing to copy — generate a document first.');
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(text);
+        alert('Executive document copied to clipboard.');
+      } catch (err) {
+        // fallback
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          document.execCommand('copy');
+          alert('Executive document copied to clipboard (fallback).');
+        } catch (e) {
+          alert('Copy failed — please select and copy manually.');
+        }
+        ta.remove();
+      }
+    };
+
+    // TWEETS UI (existing)
     document.getElementById("summaryBtn").onclick = () => {
       if (!lastSummary) {
         alert("No summary available yet. Click a topic button to generate tweets & summary first.");
@@ -168,6 +555,9 @@
     };
 
     async function fetchGrok(topic) {
+      // switch to tweets view automatically when user clicks a topic
+      showTweets();
+
       lastTopic = topic;
       lastSummary = null;
       lastResponseRaw = null;

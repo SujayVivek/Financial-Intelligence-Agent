@@ -37,7 +37,7 @@ TOPIC_INSTRUCTIONS = {
     )
 }
 
-# Strict JSON schema (string)
+# Strict JSON schema (string) for tweets (unchanged)
 STRICT_SCHEMA_JSON = json.dumps({
     "tweets": [
         {
@@ -56,10 +56,25 @@ STRICT_SCHEMA_JSON = json.dumps({
     "cfo_insights": ["short bullet 1", "short bullet 2"]  # optional but requested
 }, indent=2)
 
+# Executive schema: includes machine-readable 'tables'
+EXEC_SCHEMA_JSON = json.dumps({
+    "document": "Full executive briefing document as a single string (with sections and dates).",
+    "highlights": ["short bullet 1", "short bullet 2"],
+    "tables": [
+        {
+            "title": "M&A table",
+            "headers": ["Date", "Acquirer", "Acquiree", "Size/Valuation", "Rationale"],
+            "rows": [["2025-10-29", "Acquirer", "Acquiree", "$X", "Reason"]]
+        }
+    ],
+    "sources": [
+        {"title": "source title", "url": "https://..."}
+    ]
+}, indent=2)
 
 load_dotenv()
 
-app = FastAPI(title="Twitter AI News — Grok Backend")
+app = FastAPI(title="Twitter AI News — Grok Backend (Improved JSON extraction & Exec packs)")
 
 app.add_middleware(
     CORSMiddleware,
@@ -68,18 +83,227 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve static files at /static and index at /
 app.mount("/static", StaticFiles(directory="./static"), name="static")
 
 GROK_API_URL = "https://api.x.ai/v1/chat/completions"
 GROK_API_KEY = os.getenv("GROK_API_KEY")
 
 # ----------------------
-# Helpers: JSON extraction
+# Robust JSON extraction: find balanced JSON objects and try to parse them,
+# prefer the largest valid JSON substring.
 # ----------------------
+def extract_json_from_text(text: str) -> Any:
+    """
+    Robust extractor:
+     - scans text and finds all balanced {...} candidate substrings
+     - tries to json.loads each candidate (and also simple quote fixes)
+     - returns the first largest valid JSON object found (by length)
+    Raises ValueError if none parse.
+    """
+    if not text or not isinstance(text, str):
+        raise ValueError("No text provided for JSON extraction")
+
+    candidates = []
+    # stack-based scan for balanced braces
+    starts = []
+    for i, ch in enumerate(text):
+        if ch == "{":
+            starts.append(i)
+        elif ch == "}":
+            if starts:
+                start = starts.pop()  # matched start
+                end = i
+                # Only consider candidates with some minimum reasonable length
+                if end - start > 20:
+                    candidates.append(text[start:end+1])
+
+    # sort candidates by length descending so we try largest first
+    candidates = sorted(set(candidates), key=lambda s: -len(s))
+
+    def try_parse(s: str):
+        try:
+            return json.loads(s)
+        except Exception:
+            # quick heuristic fixes same as before
+            fixed = s.replace("“", '"').replace("”", '"').replace("’", "'").replace("\t", " ")
+            try:
+                fixed = re.sub(r"'([A-Za-z0-9_\- ]+)'\s*:", r'"\1":', fixed)
+                fixed = re.sub(r':\s*\'([^\']*)\'', r': "\1"', fixed)
+                return json.loads(fixed)
+            except Exception:
+                return None
+
+    for cand in candidates:
+        parsed = try_parse(cand)
+        if parsed is not None:
+            return parsed
+
+    # Fallback to original approach: try first { ... last } as before
+    first = text.find("{")
+    last = text.rfind("}")
+    if first != -1 and last > first:
+        candidate = text[first:last+1]
+        parsed = try_parse(candidate)
+        if parsed is not None:
+            return parsed
+
+    # If still no JSON found, raise informative error
+    raise ValueError("No valid JSON object found in text (attempted multiple heuristics)")
+
+# ----------------------
+# Regex extraction fallback for tweets (unchanged)
+# ----------------------
+RE_TWEET_URL = re.compile(r"https?://(?:x\.com|twitter\.com)/(?P<author>[^/\s]+)/status/(?P<id>\d+)", re.IGNORECASE)
+RE_ID = re.compile(r'"id"\s*:\s*"?(?P<id>\d{5,})"?')
+RE_AUTHOR_FIELD = re.compile(r'"author"\s*:\s*"?(?P<author>@?[\w_]{1,30})"?')
+RE_TEXT_FIELD = re.compile(r'"text"\s*:\s*"(?P<text>(?:\\.|[^"\\])*)"', re.S)
+RE_CREATED_AT = re.compile(r'"created_at"\s*:\s*"(?P<created>[^"]+)"')
+RE_WHY = re.compile(r'"why_selected"\s*:\s*"(?P<why>(?:\\.|[^"\\])*)"', re.S)
+RE_SUMMARY_FIELD = re.compile(r'"summary"\s*:\s*"(?P<summary>(?:\\.|[^"\\])*)"', re.S)
+
+def find_all_tweet_like_blocks(text: str) -> List[Dict[str, str]]:
+    results: List[Dict[str, str]] = []
+    if not text:
+        return results
+    text_matches = list(RE_TEXT_FIELD.finditer(text))
+    if text_matches:
+        for m in text_matches:
+            start, end = m.span()
+            window_start = max(0, start - 500)
+            window_end = min(len(text), end + 500)
+            window = text[window_start:window_end]
+            tweet = {"id": "", "author": "", "text": "", "url": "", "why_selected": "", "created_at": ""}
+            tweet["text"] = m.group("text").encode('utf-8').decode('unicode_escape') if m.group("text") else ""
+            id_m = RE_ID.search(window)
+            if id_m:
+                tweet["id"] = id_m.group("id")
+            author_m = RE_AUTHOR_FIELD.search(window)
+            if author_m:
+                author = author_m.group("author")
+                if not author.startswith("@"):
+                    author = "@" + author
+                tweet["author"] = author
+            created_m = RE_CREATED_AT.search(window)
+            if created_m:
+                tweet["created_at"] = created_m.group("created")
+            why_m = RE_WHY.search(window)
+            if why_m:
+                tweet["why_selected"] = why_m.group("why").encode('utf-8').decode('unicode_escape')
+            url_m = RE_TWEET_URL.search(window)
+            if url_m:
+                tweet["url"] = url_m.group(0)
+                if not tweet["id"]:
+                    tweet["id"] = url_m.group("id")
+                if not tweet["author"]:
+                    a = url_m.group("author")
+                    if not a.startswith("@"):
+                        a = "@" + a
+                    tweet["author"] = a
+            results.append(tweet)
+    if not results:
+        for url_m in RE_TWEET_URL.finditer(text):
+            tid = url_m.group("id")
+            author_raw = url_m.group("author")
+            author = "@" + author_raw if not author_raw.startswith("@") else author_raw
+            start, end = url_m.span()
+            window = text[max(0, start-200):min(len(text), end+400)]
+            t_m = RE_TEXT_FIELD.search(window)
+            txt = t_m.group("text") if t_m else ""
+            why_m = RE_WHY.search(window)
+            why = why_m.group("why") if why_m else ""
+            created_m = RE_CREATED_AT.search(window)
+            created = created_m.group("created") if created_m else ""
+            results.append({
+                "id": tid,
+                "author": author,
+                "text": txt,
+                "url": url_m.group(0),
+                "why_selected": why,
+                "created_at": created
+            })
+    dedup: Dict[str, Dict[str, str]] = {}
+    for r in results:
+        key = r.get("id") or r.get("url") or r.get("text")[:40]
+        if not key:
+            continue
+        if key in dedup:
+            existing = dedup[key]
+            for f in ("author", "text", "url", "why_selected", "created_at"):
+                if not existing.get(f) and r.get(f):
+                    existing[f] = r.get(f)
+        else:
+            dedup[key] = r
+    return list(dedup.values())
+
+def sanitize_tweet_obj(t: Dict[str, Any]) -> Dict[str, str]:
+    return {
+        "id": str(t.get("id") or "")[:32],
+        "author": str(t.get("author") or "")[:48],
+        "created_at": str(t.get("created_at") or "")[:64],
+        "text": str(t.get("text") or "")[:1000],
+        "url": str(t.get("url") or "")[:300],
+        "why_selected": str(t.get("why_selected") or "")[:300]
+    }
+
+# ----------------------
+# Exec prompt builder (explicitly requests machine-readable tables)
+# ----------------------
+def build_exec_prompt(countries: List[str], start_iso: str, end_iso: str) -> Dict[str, Any]:
+    countries_text = ", ".join(countries)
+    user_brief = (
+        "Prepare Executive Briefing Pack covering regulatory developments, AI developments in tech "
+        "and in deployment/adoption by different industries/countries, M&A update deals executed and its details, "
+        "cyberattack. Discuss with date of events and cover your analysis in last 24 hours.\n\n"
+        "Cyber attack : New attacks reported in different parts of world, details of incident, impact it caused, "
+        "segregate that into private sector, govt sector, who caused it, what sort of attack (e.g., ransomware) and recovery efforts. "
+        "If no attack, bring recovery efforts underway for earlier reported incidents.\n\n"
+        "Rules and regulations development : in fintech, banking, different industries related regulatory new updates, crypto world developments, "
+        "accounting, taxation, insurance, law, data privacy, auditing - only new updates.\n\n"
+        "Audit /consulting firms news update : It can cover audit firms related news such as EY/KPMG/PwC related actions - violation/fines/use of AI/Deployment of AI in finance/audit world.\n\n"
+        "Mergers & Acquisitions : New deals announced, acquirer, acquiree, size, valuation metrics, rationale, impact, valuation basis.\n\n"
+        "Give citation references from where details sought so users can click and expand more. General CFO - Lessons from the above - just summary lines."
+    )
+
+    do_not_rules = (
+        "Return only a single VALID JSON object and nothing else. Use double quotes only. "
+        "Do NOT include salutations, greetings, 'Hello', 'Hi', 'Dear', or conversational openers. "
+        "Start the `document` content directly with the briefing title or first section (no preamble). "
+        "The `document` field should be readable and may include Markdown (including markdown tables). "
+        "Additionally, include a machine-readable `tables` array: each table entry must be {title, headers: [...], rows: [[...],[...]]}. "
+        "If you include a visual table inside `document`, also include the same table in `tables` for programmatic use."
+    )
+
+    prompt_text = (
+        "You are an assistant that prepares high-quality Executive Briefing Packs for senior executives.\n\n"
+        "Output Requirement:\n"
+        "Return a STRICT, valid JSON object using the exact schema below (no extra keys, no commentary):\n\n"
+        f"{EXEC_SCHEMA_JSON}\n\n"
+        "Instructions:\n"
+        f"- TIME WINDOW: Only consider news and social posts published between {start_iso} (inclusive) and {end_iso} (inclusive) — i.e., the last 24 hours.\n"
+        f"- SCOPE: Limit your search and synthesis to events and reporting relating to these countries ONLY: {countries_text}.\n"
+        f"- FORMAT: Provide the briefing in `document` (readable text). If there are tabular items (e.g., M&A or deals), embed a readable Markdown table in `document` and ALSO include a corresponding structured object in `tables`.\n\n"
+        f"USER BRIEF:\n{user_brief}\n\n"
+        f"Other rules:\n{do_not_rules}\n\n"
+        "If you cannot find content for a subsection, explicitly state 'No material new items in the last 24 hours' for that subsection but provide a short analytical comment. Always return valid JSON even if some arrays are empty."
+    )
+
+    payload = {
+        "model": "grok-3",
+        "messages": [
+            {"role": "system", "content": "You are a precise briefing writer. Output valid JSON only."},
+            {"role": "user", "content": prompt_text}
+        ],
+        # increased to reduce truncation (model limits permitting)
+        "temperature": 0.0,
+        "max_tokens": 3500
+    }
+
+    return {"prompt": prompt_text, "payload": payload}
+
+
 def build_grok_prompt(topic: str, n: int, prefer_verified: bool = True) -> Dict[str, Any]:
     """
-    Build the payload (prompt + model args) to send to Grok.
+    Build the payload (prompt + model args) to send to Grok for tweet extraction.
     Returns a dict with keys: 'prompt' (str) and 'payload' (dict for requests.post).
     """
     # Compute last-24-hours window in ISO8601 (UTC)
@@ -139,163 +363,8 @@ def build_grok_prompt(topic: str, n: int, prefer_verified: bool = True) -> Dict[
 
     return {"prompt": prompt_text, "payload": payload}
 
-def extract_json_from_text(text: str) -> Any:
-    """
-    Attempt to extract the first JSON object found in `text`.
-    If it fails, raises ValueError with a message.
-    """
-    if not text or not isinstance(text, str):
-        raise ValueError("No text provided for JSON extraction")
-
-    # Locate first '{' and last '}' and try strict load
-    first = text.find("{")
-    last = text.rfind("}")
-    if first == -1 or last == -1 or last < first:
-        raise ValueError("No balanced JSON object braces found")
-
-    candidate = text[first:last+1]
-
-    # Try strict JSON parse
-    try:
-        return json.loads(candidate)
-    except Exception as e:
-        # Try simple fixes: normalize smart quotes -> normal quotes
-        fixed = candidate.replace("“", '"').replace("”", '"').replace("’", "'").replace("\t", " ")
-        # Convert single-quoted JSON-ish strings to double-quoted where safe:
-        # - replace keys and simple values in a conservative manner
-        try:
-            # Replace `'key':` -> `"key":`
-            fixed = re.sub(r"'([A-Za-z0-9_\- ]+)'\s*:", r'"\1":', fixed)
-            # Replace : 'value' or : 'value with \'' -> : "value"
-            fixed = re.sub(r':\s*\'([^\']*)\'', r': "\1"', fixed)
-            return json.loads(fixed)
-        except Exception as e2:
-            raise ValueError(f"JSON parse failed (strict + heuristic attempts). Errors: {e}; {e2}")
-
 # ----------------------
-# Helpers: regex extraction fallback
-# ----------------------
-RE_TWEET_URL = re.compile(r"https?://(?:x\.com|twitter\.com)/(?P<author>[^/\s]+)/status/(?P<id>\d+)", re.IGNORECASE)
-RE_ID = re.compile(r'"id"\s*:\s*"?(?P<id>\d{5,})"?')
-RE_AUTHOR_FIELD = re.compile(r'"author"\s*:\s*"?(?P<author>@?[\w_]{1,30})"?')
-RE_TEXT_FIELD = re.compile(r'"text"\s*:\s*"(?P<text>(?:\\.|[^"\\])*)"', re.S)
-RE_CREATED_AT = re.compile(r'"created_at"\s*:\s*"(?P<created>[^"]+)"')
-RE_WHY = re.compile(r'"why_selected"\s*:\s*"(?P<why>(?:\\.|[^"\\])*)"', re.S)
-RE_SUMMARY_FIELD = re.compile(r'"summary"\s*:\s*"(?P<summary>(?:\\.|[^"\\])*)"', re.S)
-
-def find_all_tweet_like_blocks(text: str) -> List[Dict[str, str]]:
-    """
-    Use several heuristics to extract tweet-like items from raw text.
-    Returns a list of dicts containing possible fields (id, author, text, url, why_selected, created_at).
-    The results are best-effort and prioritized by confidence.
-    """
-    results: List[Dict[str, str]] = []
-
-    if not text:
-        return results
-
-    # 1) Find explicit JSON-ish "text": "..." blocks (likely present even in malformed JSON)
-    # We'll find indexes of all occurrences of '"text":' and try to collect surrounding fields.
-    text_matches = list(RE_TEXT_FIELD.finditer(text))
-    if text_matches:
-        for m in text_matches:
-            start, end = m.span()
-            # Look backwards a bit for id/author/created/why and forwards for url
-            window_start = max(0, start - 500)
-            window_end = min(len(text), end + 500)
-            window = text[window_start:window_end]
-
-            tweet = {"id": "", "author": "", "text": "", "url": "", "why_selected": "", "created_at": ""}
-            tweet["text"] = m.group("text").encode('utf-8').decode('unicode_escape') if m.group("text") else ""
-
-            id_m = RE_ID.search(window)
-            if id_m:
-                tweet["id"] = id_m.group("id")
-
-            author_m = RE_AUTHOR_FIELD.search(window)
-            if author_m:
-                author = author_m.group("author")
-                # ensure leading @
-                if not author.startswith("@"):
-                    author = "@" + author
-                tweet["author"] = author
-
-            created_m = RE_CREATED_AT.search(window)
-            if created_m:
-                tweet["created_at"] = created_m.group("created")
-
-            why_m = RE_WHY.search(window)
-            if why_m:
-                tweet["why_selected"] = why_m.group("why").encode('utf-8').decode('unicode_escape')
-
-            url_m = RE_TWEET_URL.search(window)
-            if url_m:
-                tweet["url"] = url_m.group(0)
-                if not tweet["id"]:
-                    tweet["id"] = url_m.group("id")
-                if not tweet["author"]:
-                    a = url_m.group("author")
-                    if not a.startswith("@"):
-                        a = "@" + a
-                    tweet["author"] = a
-
-            results.append(tweet)
-
-    # 2) If no text fields discovered, try to find URLs and build tweet objects from them
-    if not results:
-        for url_m in RE_TWEET_URL.finditer(text):
-            tid = url_m.group("id")
-            author_raw = url_m.group("author")
-            author = "@" + author_raw if not author_raw.startswith("@") else author_raw
-            # Try to find a text snippet nearby (short window)
-            start, end = url_m.span()
-            window = text[max(0, start-200):min(len(text), end+400)]
-            # Try to find a quoted snippet after the url or before
-            t_m = RE_TEXT_FIELD.search(window)
-            txt = t_m.group("text") if t_m else ""
-            why_m = RE_WHY.search(window)
-            why = why_m.group("why") if why_m else ""
-            created_m = RE_CREATED_AT.search(window)
-            created = created_m.group("created") if created_m else ""
-            results.append({
-                "id": tid,
-                "author": author,
-                "text": txt,
-                "url": url_m.group(0),
-                "why_selected": why,
-                "created_at": created
-            })
-
-    # 3) Deduplicate by id or url
-    dedup: Dict[str, Dict[str, str]] = {}
-    for r in results:
-        key = r.get("id") or r.get("url") or r.get("text")[:40]
-        if not key:
-            continue
-        if key in dedup:
-            # merge missing fields
-            existing = dedup[key]
-            for f in ("author", "text", "url", "why_selected", "created_at"):
-                if not existing.get(f) and r.get(f):
-                    existing[f] = r.get(f)
-        else:
-            dedup[key] = r
-
-    return list(dedup.values())
-
-def sanitize_tweet_obj(t: Dict[str, Any]) -> Dict[str, str]:
-    """Return sanitized tweet dict with required keys and safe strings."""
-    return {
-        "id": str(t.get("id") or "")[:32],
-        "author": str(t.get("author") or "")[:48],
-        "created_at": str(t.get("created_at") or "")[:64],
-        "text": str(t.get("text") or "")[:1000],
-        "url": str(t.get("url") or "")[:300],
-        "why_selected": str(t.get("why_selected") or "")[:300]
-    }
-
-# ----------------------
-# Main endpoint
+# Standard tweet endpoint (unchanged logic)
 # ----------------------
 @app.get("/")
 def serve_frontend():
@@ -307,32 +376,18 @@ def get_summary(
     n: int = Query(5, description="Number of top tweets to fetch (prefer <=10)"),
     raw: bool = Query(False, description="Return raw grok output for debugging")
 ):
-    """
-    Query Grok to fetch top tweets for a topic and return structured JSON.
-    Uses build_grok_prompt() to create a strict prompt that requests valid JSON.
-    Retains robust fallback behavior:
-      1) Try strict JSON extraction from Grok response.
-      2) If that fails, call Grok again asking to reformat into valid JSON.
-      3) If reformat fails or Grok is unreachable, fall back to regex-based extraction.
-    Returns a consistent JSON structure similar to the previous implementation.
-    """
-    # quick sanity
     if not GROK_API_KEY:
         return {"error": "GROK_API_KEY not configured on server (set in .env)"}
 
-    # Build prompt/payload using the helper (ensures time-window, topic-specific instructions, strict JSON)
     gp = build_grok_prompt(topic, n, prefer_verified=True)
     payload = gp["payload"]
-
     headers = {"Authorization": f"Bearer {GROK_API_KEY}", "Content-Type": "application/json"}
 
     try:
-        # Primary call to Grok
         resp = requests.post(GROK_API_URL, headers=headers, json=payload, timeout=90)
         resp.raise_for_status()
         res_json = resp.json()
 
-        # Extract main textual content from common Grok/chat response shapes
         content = ""
         if isinstance(res_json, dict):
             if "choices" in res_json and res_json["choices"]:
@@ -344,24 +399,19 @@ def get_summary(
                 else:
                     content = str(res_json["output"])
             else:
-                # Fallback: stringify the whole response
                 content = json.dumps(res_json)
         else:
             content = str(res_json)
-        
 
         cleaned_content = content.strip()
-        cleaned_content = re.sub(r'```json|```', '', cleaned_content)  # remove code fences
-        cleaned_content = re.sub(r',\s*}', '}', cleaned_content)       # trailing commas
+        cleaned_content = re.sub(r'```json|```', '', cleaned_content)
+        cleaned_content = re.sub(r',\s*}', '}', cleaned_content)
         cleaned_content = re.sub(r',\s*\]', ']', cleaned_content)
-
-        # replace the old content with cleaned version
         content = cleaned_content
-        # If raw requested, return raw response for debugging
+
         if raw:
             return {"raw_response": res_json, "content": content}
 
-        # 1) Attempt strict JSON extraction
         try:
             parsed = extract_json_from_text(content)
             tweets = parsed.get("tweets", []) or []
@@ -377,7 +427,6 @@ def get_summary(
                 "raw_content": None
             }
         except Exception as primary_err:
-            # Primary parse failed -> attempt reformat via Grok (reformat request)
             fix_prompt = (
                 "The content below was intended to be valid JSON following a strict schema, "
                 "but the returned text appears malformed or truncated. "
@@ -385,7 +434,6 @@ def get_summary(
                 "If a tweet is incomplete, drop it. Keep fields compact and use double quotes.\n\n"
                 "RAW CONTENT START:\n\n" + content + "\n\nRAW CONTENT END."
             )
-
             fix_payload = {
                 "model": "grok-3",
                 "messages": [
@@ -393,23 +441,18 @@ def get_summary(
                     {"role": "user", "content": fix_prompt}
                 ],
                 "temperature": 0.0,
-                "max_tokens": 800
+                "max_tokens": 1200
             }
-
-            # Call the reformat attempt
             try:
                 fix_resp = requests.post(GROK_API_URL, headers=headers, json=fix_payload, timeout=30)
                 fix_resp.raise_for_status()
                 fix_json = fix_resp.json()
-
                 fix_content = ""
                 if isinstance(fix_json, dict) and "choices" in fix_json and fix_json["choices"]:
                     ch0 = fix_json["choices"][0]
                     fix_content = ch0.get("message", {}).get("content") or ch0.get("text") or ""
                 else:
                     fix_content = json.dumps(fix_json)
-
-                # Try parsing the fixed content
                 try:
                     parsed2 = extract_json_from_text(fix_content)
                     tweets = parsed2.get("tweets", []) or []
@@ -425,7 +468,6 @@ def get_summary(
                         "raw_content": content
                     }
                 except Exception as reformat_err:
-                    # Reformatting produced content but still failed to parse -> regex fallback
                     fallback = find_all_tweet_like_blocks(content)
                     sanitized = [sanitize_tweet_obj(t) for t in fallback][:n]
                     summary_m = RE_SUMMARY_FIELD.search(content)
@@ -441,7 +483,6 @@ def get_summary(
                         "reformat_error": str(reformat_err)
                     }
             except Exception as fix_call_exc:
-                # Reformat call failed entirely -> regex fallback
                 fallback = find_all_tweet_like_blocks(content)
                 sanitized = [sanitize_tweet_obj(t) for t in fallback][:n]
                 summary_m = RE_SUMMARY_FIELD.search(content)
@@ -465,8 +506,159 @@ def get_summary(
     except Exception as e:
         return {"error": str(e)}
 
+# ----------------------
+# New/Improved endpoint: Executive Summary (robust + tables)
+# ----------------------
+@app.get("/get_exec_summary")
+def get_exec_summary(
+    countries: Optional[str] = Query(None, description="Comma-separated list of countries (default: 7 Gulf countries)"),
+    raw: bool = Query(False, description="Return raw grok output for debugging")
+):
+    if not GROK_API_KEY:
+        return {"error": "GROK_API_KEY not configured on server (set in .env)"}
 
-# If run directly, allow local debug
+    default_countries = ["Saudi Arabia", "United Arab Emirates", "Qatar", "Kuwait", "Bahrain", "Oman", "Iraq"]
+    if countries:
+        try:
+            provided = [c.strip() for c in countries.split(",") if c.strip()]
+            country_list = provided if provided else default_countries
+        except Exception:
+            country_list = default_countries
+    else:
+        country_list = default_countries
+
+    now_utc = datetime.now(timezone.utc)
+    start_utc = now_utc - timedelta(hours=24)
+    start_iso = start_utc.replace(microsecond=0).isoformat()
+    end_iso = now_utc.replace(microsecond=0).isoformat()
+
+    gp = build_exec_prompt(country_list, start_iso, end_iso)
+    payload = gp["payload"]
+    headers = {"Authorization": f"Bearer {GROK_API_KEY}", "Content-Type": "application/json"}
+
+    try:
+        # longer timeout to reduce truncation risks
+        resp = requests.post(GROK_API_URL, headers=headers, json=payload, timeout=180)
+        resp.raise_for_status()
+        res_json = resp.json()
+
+        content = ""
+        if isinstance(res_json, dict):
+            if "choices" in res_json and res_json["choices"]:
+                ch0 = res_json["choices"][0]
+                content = ch0.get("message", {}).get("content") or ch0.get("text") or ""
+            elif "output" in res_json:
+                if isinstance(res_json["output"], list):
+                    content = " ".join(map(str, res_json["output"]))
+                else:
+                    content = str(res_json["output"])
+            else:
+                content = json.dumps(res_json)
+        else:
+            content = str(res_json)
+
+        cleaned_content = content.strip()
+        # keep markdown tables if present; only remove explicit triple backticks around json blocks
+        cleaned_content = re.sub(r'```json', '', cleaned_content)
+        # we will not blindly strip all backticks here to preserve markdown tables in `document`
+        cleaned_content = re.sub(r',\s*}', '}', cleaned_content)
+        cleaned_content = re.sub(r',\s*\]', ']', cleaned_content)
+        content = cleaned_content
+
+        if raw:
+            return {"raw_response": res_json, "content": content}
+
+        # Try strong JSON extraction (robust)
+        try:
+            parsed = extract_json_from_text(content)
+            document = parsed.get("document", "") or ""
+            highlights = parsed.get("highlights", []) or []
+            sources = parsed.get("sources", []) or []
+            tables = parsed.get("tables", []) or []
+            return {
+                "document": document,
+                "highlights": highlights,
+                "tables": tables,
+                "sources": sources,
+                "source": "grok",
+                "raw_content": None
+            }
+        except Exception as parse_err:
+            # If parse fails, ask Grok to reformat the raw content into the exact schema,
+            # and explicitly request converting any narrative table into arrays.
+            fix_prompt = (
+                "The content below was intended to be valid JSON following this schema:\n\n"
+                f"{EXEC_SCHEMA_JSON}\n\n"
+                "However it's malformed/truncated. Please OUTPUT ONLY a single VALID JSON object exactly following the schema. "
+                "If you included any readable tables in the `document`, also add a corresponding entry in `tables` with 'title', 'headers' and 'rows'. "
+                "If a subsection has no new items, put: 'No material new items in the last 24 hours' for that subsection.\n\n"
+                "RAW CONTENT START:\n\n" + content + "\n\nRAW CONTENT END."
+            )
+            fix_payload = {
+                "model": "grok-3",
+                "messages": [
+                    {"role": "system", "content": "You are a precise briefing writer. Output VALID JSON only."},
+                    {"role": "user", "content": fix_prompt}
+                ],
+                "temperature": 0.0,
+                "max_tokens": 1600
+            }
+            try:
+                fix_resp = requests.post(GROK_API_URL, headers=headers, json=fix_payload, timeout=60)
+                fix_resp.raise_for_status()
+                fix_json = fix_resp.json()
+                fix_content = ""
+                if isinstance(fix_json, dict) and "choices" in fix_json and fix_json["choices"]:
+                    ch0 = fix_json["choices"][0]
+                    fix_content = ch0.get("message", {}).get("content") or ch0.get("text") or ""
+                else:
+                    fix_content = json.dumps(fix_json)
+                try:
+                    parsed2 = extract_json_from_text(fix_content)
+                    document = parsed2.get("document", "") or ""
+                    highlights = parsed2.get("highlights", []) or []
+                    sources = parsed2.get("sources", []) or []
+                    tables = parsed2.get("tables", []) or []
+                    return {
+                        "document": document,
+                        "highlights": highlights,
+                        "tables": tables,
+                        "sources": sources,
+                        "source": "grok_reformat",
+                        "raw_content": content
+                    }
+                except Exception as reformat_err:
+                    # As last fallback, return raw content as document with a parse_error field
+                    return {
+                        "document": content,
+                        "highlights": [],
+                        "tables": [],
+                        "sources": [],
+                        "source": "grok_raw_fallback",
+                        "raw_content": content,
+                        "parse_error": str(parse_err),
+                        "reformat_error": str(reformat_err)
+                    }
+            except Exception as fix_call_exc:
+                return {
+                    "document": content,
+                    "highlights": [],
+                    "tables": [],
+                    "sources": [],
+                    "source": "grok_reformat_failed",
+                    "raw_content": content,
+                    "reformat_call_error": str(fix_call_exc),
+                    "parse_error": str(parse_err)
+                }
+
+    except requests.Timeout:
+        return {"error": "Grok API timed out. Try again later."}
+    except requests.HTTPError as http_err:
+        body = http_err.response.text if (http_err.response is not None) else ""
+        return {"error": f"HTTPError calling Grok: {http_err}", "body": body}
+    except Exception as e:
+        return {"error": str(e)}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False)
