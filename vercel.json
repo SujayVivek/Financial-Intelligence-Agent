@@ -1,7 +1,7 @@
 {
   "builds": [
     { "src": "index.py", "use": "@vercel/python" },
-    { "src": "static/**/*", "use": "@vercel/static" }
+    { "src": "static/index.html", "use": "@vercel/static" }
   ],
   "routes": [
     { "src": "/api/(.*)", "dest": "index.py" },
