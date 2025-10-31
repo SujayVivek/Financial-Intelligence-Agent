@@ -597,17 +597,23 @@ def get_exec_summary(
             fix_payload = {
                 "model": "grok-3",
                 "messages": [
-                    {"role": "system", "content": "You are a precise briefing writer. Output VALID JSON only."},
+                    {"role": "system", "content": (
+                        "You are a detailed executive intelligence assistant. "
+                        "Write longer, analytical, and context-rich briefings (8,000–10,000 characters). "
+                        "Cover implications, causal links, and impact where relevant. "
+                        "Important! - Ensure all text fits within VALID JSON under the field names exactly as specified."
+                    )},
                     {"role": "user", "content": fix_prompt}
                 ],
                 "temperature": 0.0,
-                "max_tokens": 1600
+                "max_tokens": 10000
             }
             try:
-                fix_resp = requests.post(GROK_API_URL, headers=headers, json=fix_payload, timeout=60)
+                fix_resp = requests.post(GROK_API_URL, headers=headers, json=fix_payload, timeout=80)
                 fix_resp.raise_for_status()
                 fix_json = fix_resp.json()
                 fix_content = ""
+                # print(len(fix_resp['choices'][0]['message']['content']))
                 if isinstance(fix_json, dict) and "choices" in fix_json and fix_json["choices"]:
                     ch0 = fix_json["choices"][0]
                     fix_content = ch0.get("message", {}).get("content") or ch0.get("text") or ""

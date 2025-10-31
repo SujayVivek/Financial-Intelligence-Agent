@@ -109,6 +109,15 @@
     button.glass {
       background: linear-gradient(135deg, rgba(200, 155, 38, 0.15), rgba(255, 255, 255, 0.05));
     }
+    button.glass:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 14px rgba(200,155,38,0.35);
+      transition: all 0.25s ease;
+    }
+    button.glass:active {
+      transform: scale(0.96);
+      box-shadow: 0 0 6px rgba(200,155,38,0.4);
+    }
 
     @media (min-width: 768px) {
       .tweet-grid { grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -602,18 +611,16 @@
 
           const created = t.created_at ? new Date(t.created_at).toLocaleString() : '';
           c.innerHTML = `
-            <div class="open-ind">Click to view link</div>
+            <div class="open-ind">Click to view Category</div>
             <div style="display:flex; gap:12px; align-items:flex-start;">
               <div style="flex:1">
                 <div class="tweet-meta">${escapeHtml(t.author || '')} · ${escapeHtml(created)}</div>
                 <div class="tweet-text">${escapeHtml(t.text || '')}</div>
-                <div class="why-selected">${escapeHtml(t.why_selected || '')}</div>
               </div>
             </div>
             <div class="tweet-link-row">
-              <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-                <div style="font-size:0.9rem; color:#c89b26; overflow-wrap:anywhere;">${t.url ? `<a class="tlink" href="${escapeHtml(t.url)}" target="_blank">${escapeHtml(t.url)}</a>` : '<span style="color:#d8c38b">No URL provided</span>'}</div>
-                ${t.url ? `<button class="glass" style="padding:6px 10px; border-radius:8px;" onclick="window.open('${escapeHtml(t.url)}','_blank')">Open Tweet</button>` : ''}
+              <div style="padding:8px 10px; font-size:0.9rem; color:#d8c38b;">
+                <div class="why-selected">${escapeHtml(t.why_selected || '')}</div>
               </div>
             </div>`;
           c.addEventListener('click', (ev) => {
