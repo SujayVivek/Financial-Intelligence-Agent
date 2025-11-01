@@ -1,4 +1,6 @@
 # app.py
+print(">>> FastAPI app loading successfully. lol sujay")
+
 import os
 import re
 import json
@@ -7,7 +9,7 @@ from typing import List, Dict, Any, Optional
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
 
@@ -79,9 +81,14 @@ app = FastAPI(title="Twitter AI News — Grok Backend (Improved JSON extraction 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/ping")
+def ping():
+    return JSONResponse({"status": "ok"})
 
 app.mount("/static", StaticFiles(directory="./static"), name="static")
 
@@ -667,7 +674,7 @@ def get_exec_summary(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("index:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("index:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)), reload=False)
 
-handler = app 
+handler = app
 
