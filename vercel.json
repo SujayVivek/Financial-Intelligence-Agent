@@ -4,7 +4,6 @@
     { "src": "static/index.html", "use": "@vercel/static" }
   ],
   "routes": [
-    { "src": "/(get_summary|get_exec_summary|get_tweets)", "dest": "index.py" },
-    { "src": "/(.*)", "dest": "/static/$1" }
+    { "src": "/(.*)", "dest": "index.py" }
   ]
 }
