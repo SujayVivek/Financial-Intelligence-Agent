@@ -375,6 +375,7 @@ def build_grok_prompt(topic: str, n: int, prefer_verified: bool = True) -> Dict[
 # ----------------------
 @app.get("/")
 def serve_frontend():
+    print("HELLO BANSAL")
     return FileResponse("./static/index.html")
 
 @app.get("/get_summary")
@@ -674,7 +675,8 @@ def get_exec_summary(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("api.index:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
+    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
 
 
 
+    
