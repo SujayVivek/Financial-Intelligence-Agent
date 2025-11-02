@@ -81,14 +81,25 @@
       100% { opacity: 0.45 }
     }
 
-    .open-ind {
-      position: absolute;
-      right: 12px;
-      top: 12px;
-      font-size: 0.8rem;
-      color: #c89b26;
-      opacity: 0.9;
+
+    .tweet-card {
+    padding-right: 80px; /* enough room for the badge on desktop */
     }
+    .open-ind {
+  position: absolute;
+  right: 12px;
+  top: 10px;
+  font-size: 0.72rem;       /* smaller label */
+  color: #c89b26;
+  background: rgba(0,0,0,0.22);
+  padding: 6px 8px;
+  border-radius: 8px;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.35);
+  pointer-events: none;     /* clicking card still toggles open as before */
+  opacity: 0.95;
+}
 
     #summaryOutput {
       margin-top: 14px;
@@ -243,6 +254,314 @@
     /* small wrapper tweaks */
     .exec-doc .markdown-body { background: transparent; padding: 6px; }
 
+          /* ------------------ RESPONSIVE TWEAKS — paste at END of your existing <style> ------------------ */
+
+      /* make main wrapper predictable and fluid */
+      .w-full.max-w-6xl {
+        width: 100%;
+        max-width: 1100px;    /* desktop max */
+        margin: 20px auto;
+        box-sizing: border-box;
+        padding-left: 18px;
+        padding-right: 18px;
+      }
+
+      /* scale base font subtly using clamp for nicer small-screen reading */
+      :root {
+        font-size: clamp(14px, 1.6vw, 16px);
+      }
+
+      /* general small-screen spacing reductions */
+      @media (max-width: 1024px) {
+        body { padding: 28px; }
+        .w-full.max-w-6xl { margin: 16px; padding: 16px; }
+        .exec-doc { max-height: 46vh; }
+      }
+
+      /* tablet / phone */
+      @media (max-width: 768px) {
+        body { padding: 18px; }
+        .w-full.max-w-6xl { margin: 12px; padding: 14px; max-width: 720px; }
+
+        /* nav buttons wrap and get smaller */
+        .nav { flex-wrap: wrap; gap: 8px; align-items: stretch; }
+        .nav button { flex: 1 1 48%; padding: 8px 10px; font-size: 0.95rem; }
+
+        /* exec & tweet panels */
+        .exec-panel, .tweet-panel { width: 100%; }
+        .exec-doc { max-height: 56vh; padding: 10px; font-size: 0.95rem; }
+
+        /* tweet cards and grid */
+        .tweet-grid { grid-template-columns: 1fr; gap: 10px; }
+        .tweet-card { padding: 14px; border-radius: 10px; }
+        .tweet-text { font-size: 0.95rem; }
+        .tweet-meta { font-size: 0.82rem; }
+
+        /* shrink control elements */
+        select, button { padding: 8px 10px; font-size: 0.95rem; }
+
+        /* make topic buttons wrap; two per row */
+        .topic-btn { flex: 1 1 48%; min-width: 120px; }
+      }
+
+          /* small phones */
+          @media (max-width: 420px) {
+      body { padding: 12px; }
+      .w-full.max-w-6xl { margin: 8px; padding: 12px; }
+      .nav button { flex: 1 1 100%; font-size: 0.92rem; padding: 8px; }
+      .topic-btn { flex: 1 1 48%; min-width: 120px; font-size: 0.92rem; padding: 8px; }
+      .exec-doc { max-height: 62vh; font-size: 0.92rem; }
+      .tweet-text { font-size: 0.9rem; line-height: 1.25; }
+    }
+
+    /* responsive markdown tables & images */
+    .markdown-body table { display: block; width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .markdown-body img { max-width: 100%; height: auto; display: block; margin: 8px 0; }
+
+    /* ensure modal-like elements + small paddings look ok */
+    .exec-doc .glass { padding: 10px !important; }
+    .copy-btn, button.glass { min-height: 38px; }
+
+    /* accessibility: slightly larger tappable area on tiny screens */
+    @media (max-width: 520px) {
+      button, .topic-btn, select { min-height: 44px; }
+    }
+
+    /* optional: reduce the heavy blur/backdrop on very small screens for perf */
+    @media (max-width: 420px) {
+      .glass { backdrop-filter: none; background: rgba(255,255,255,0.03); }
+    }
+
+
+
+    header > div.flex.items-center.gap-3,
+    header > .flex.items-center.gap-3 {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    /* make the two buttons look balanced on medium+ screens */
+    #generateExec, #copyExec {
+      min-width: 140px;
+      flex: 0 0 auto;
+      padding: 10px 14px;
+      font-size: 1rem;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+
+    /* nicer primary/secondary visual hierarchy (optional; safe) */
+    #generateExec { font-weight: 600; }
+    #copyExec { opacity: 0.95; }
+
+    /* SMALL / MOBILE: stack and full-width */
+    @media (max-width: 768px) {
+      /* stack the control area vertically and make buttons full width */
+      header > div.flex.items-center.gap-3,
+      header > .flex.items-center.gap-3 {
+        flex-direction: column;
+        width: 100%;
+        gap: 8px;
+        align-items: stretch;
+      }
+
+      #generateExec, #copyExec {
+        width: 100% !important;
+        flex: 1 1 auto;
+        min-width: 0;
+        padding: 12px 14px;
+        font-size: 0.98rem;
+        border-radius: 10px;
+      }
+
+      /* ensure the "Copy All" is visually less dominant */
+      #copyExec { opacity: 0.95; }
+    }
+
+    /* VERY SMALL PHONES: increase tappable area */
+    @media (max-width: 420px) {
+      #generateExec, #copyExec {
+        padding: 14px 14px;
+        font-size: 0.96rem;
+        min-height: 46px;
+      }
+    }
+    /* Ensure card content doesn't flow under the badge on small screens */
+@media (max-width: 768px) {
+  .tweet-card { padding-right: 64px; }
+  .open-ind { right: 10px; top: 8px; padding: 5px 7px; font-size: 0.7rem; border-radius: 7px; }
+  .tweet-text { font-size: 0.95rem; }
+}
+
+/* VERY small phones */
+@media (max-width: 420px) {
+  .tweet-card { padding-right: 56px; }
+  .open-ind { right: 8px; top: 8px; padding: 5px 6px; font-size: 0.66rem; }
+}
+
+/* ------------------ Exec doc / M&A table responsiveness ------------------ */
+
+/* Force markdown tables to be scrollable and table cells to wrap */
+.exec-doc .markdown-body,
+.exec-doc {
+  box-sizing: border-box;
+}
+
+/* If markdown has a table element, allow horizontal scroll while keeping width 100% */
+.exec-doc .markdown-body table {
+  display: table;
+  width: 100%;
+  max-width: 100%;
+  table-layout: auto;
+  border-collapse: collapse;
+  overflow-wrap: anywhere;     /* helps long words / URLs wrap */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Ensure th/td can wrap and don't overflow */
+.exec-doc .markdown-body table th,
+.exec-doc .markdown-body table td {
+  white-space: normal;
+  word-break: break-word;
+  padding: 8px 10px;
+  vertical-align: top;
+  min-width: 70px;            /* small min width so columns remain usable */
+}
+
+/* If a rendered structured table uses a .glass wrapper, make that wrapper horizontally scrollable */
+.exec-doc > .glass,
+.exec-doc .glass {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* For any appended structured "renderTableIntoEl" tables: make them responsive */
+.exec-doc .glass table {
+  width: 100%;
+  table-layout: auto;
+  max-width: 100%;
+}
+
+/* Small-screen tweaks: shrink table font slightly so it fits better */
+@media (max-width: 768px) {
+  .exec-doc .markdown-body table th,
+  .exec-doc .markdown-body table td { padding: 6px 8px; font-size: 0.92rem; }
+}
+
+/* Accessibility: keep the click area for badge non-blocking */
+.tweet-card .open-ind[aria-hidden="true"] { pointer-events: none; }
+
+/* Optional visual touch: make the badge less likely to collide on wrap */
+.tweet-card .tweet-meta { margin-right: 6px; }
+
+/* ---------- End CSS fixes ---------- */
+    /* ---------- Minimal responsive fixes: dropdown + "Click to view Reason" badge ---------- */
+
+/* Reserve right space inside tweet card so badge never overlaps text */
+.tweet-card {
+  padding-right: 68px;           /* give room for badge */
+  box-sizing: border-box;
+}
+
+/* Ensure tweet text/meta avoid the badge area */
+.tweet-meta,
+.tweet-text {
+  margin-right: 6px;            /* keep a little breathing room; do NOT over-shift */
+}
+
+/* The badge — compact, visually separated, ellipsized on narrow screens */
+.open-ind {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  z-index: 6;
+  display: inline-block;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: rgba(0,0,0,0.09);
+  color: #c89b26;
+  font-size: 0.78rem;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;             /* long label truncated on desktop */
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+}
+
+/* Slight press effect */
+.open-ind:active { transform: translateY(1px); }
+
+/* On small screens shorten/truncate the badge more aggressively so it never collides */
+@media (max-width: 520px) {
+  .tweet-card { padding-right: 54px; }
+  .open-ind {
+    top: 10px;
+    right: 10px;
+    padding: 5px 6px;
+    font-size: 0.68rem;
+    max-width: 90px;            /* likely becomes "Click to v…" or similar */
+  }
+}
+
+/* If you prefer an icon-only tiny badge on very small screens, uncomment next block:
+@media (max-width: 420px) {
+  .open-ind { font-size:0.0; padding:6px 8px; max-width:34px; }
+  .open-ind::before { content: "⋯"; font-size:0.92rem; color:#c89b26; display:inline-block; }
+}
+*/
+
+/* ------------ Dropdown sizing & right alignment ------------ */
+
+/* Make header layout tolerant to wrapping but keep controls visually to the right */
+#tweetPanel > header { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+
+/* Prefer the *last* header column (controls) to sit to the right */
+#tweetPanel > header > div:last-child { margin-left: auto; display:flex; gap:8px; align-items:center; }
+
+/* Small, fixed dropdown width so it doesn't collide with text */
+#numSelect {
+  color: #fefcf8;                           /* label color when closed */
+  background: rgba(255,255,255,0.03);       /* darkish background */
+  border: 1px solid rgba(200,155,38,0.3);
+  -webkit-appearance: none;
+  appearance: none;
+  padding: 7px 8px;
+  box-sizing: border-box;
+}
+#numSelect option {
+  color: #111 !important;                   /* readable on light popup backgrounds */
+  background: #ffffff !important;           /* explicit bg so some engines show correctly */
+}
+
+/* Keep focus ring tidy */
+#numSelect:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(200,155,38,0.08);
+}
+
+/* Small-screen sizing (keeps earlier sizing rules intact) */
+@media (max-width: 520px) {
+  #numSelect { width: 76px; padding: 7px 6px; font-size: 0.92rem; }
+}
+/* Slightly smaller on narrow screens */
+@media (max-width: 520px) {
+  #numSelect { width: 76px; padding: 7px 6px; font-size: 0.92rem; }
+  #tweetPanel > header > div:last-child { margin-left: 0; width: 100%; justify-content: flex-end; }
+}
+
+/* Keep the "Top" label inline and avoid wrapping into the dropdown on small widths */
+#tweetPanel > header label { white-space: nowrap; margin-right: 6px; }
+
+/* Safety: ensure tweet cards stay a single column on tiny screens (keeps layout predictable) */
+@media (max-width: 420px) {
+  .tweet-grid { grid-template-columns: 1fr; gap: 10px; }
+  .tweet-card { padding: 12px; border-radius: 10px; }
+}
+
+    
   </style>
 </head>
 <body>
@@ -611,7 +930,7 @@
 
           const created = t.created_at ? new Date(t.created_at).toLocaleString() : '';
           c.innerHTML = `
-            <div class="open-ind">Click to view Reason</div>
+            <div class="open-ind">Reason</div>
             <div style="display:flex; gap:12px; align-items:flex-start;">
               <div style="flex:1">
                 <div class="tweet-meta">${escapeHtml(t.author || '')} · ${escapeHtml(created)}</div>
